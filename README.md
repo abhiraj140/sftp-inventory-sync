@@ -1,2 +1,2 @@
-document for sftp-inventory-sync
+document for sftp-inventory-sync !
 # sftp-inventory-sync
