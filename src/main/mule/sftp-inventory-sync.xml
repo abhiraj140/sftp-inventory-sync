@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
-	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
-http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
 	<flow name="sftp-inventory-sync-flow" doc:id="35f86b6c-8b46-4ba1-9a0f-71380165b341" >
 		<sftp:read doc:name="read-full-inventory-data" doc:id="7e62d2a7-629e-49c7-a716-fcc73c79ccb2" config-ref="SFTP_Config" path='#["source/full_inventory_$(now() as Date as String).csv"]' outputMimeType='application/csv; bodystartlinenumber=1; headerlinenumber=0; streaming=true; separator=","; header=true' >
 			<non-repeatable-stream />
@@ -18,9 +19,9 @@ output application/json deferred=true, indent=false
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<batch:job jobName="sftp-inventory-sync-batch-job" doc:id="5b11018a-7764-49c1-9152-07790d4710c9">
+		<batch:job jobName="sftp-inventory-sync-batch-job" doc:id="5b11018a-7764-49c1-9152-07790d4710c9" blockSize="20" maxConcurrency="1">
 			<batch:process-records>
-				<batch:step name="batch-step-valid-records" doc:id="3eaef80a-6c52-4dbf-a16d-987cbf0b3315" >
+				<batch:step name="batch-step-valid-records" doc:id="3eaef80a-6c52-4dbf-a16d-987cbf0b3315" acceptExpression='#[((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]'>
 					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="364a9622-4ded-4dc8-9ef1-c457bf2efa37" streaming="true" preserveMimeTypes="true">
 						<ee:transform doc:name="group-data-by-StoreId" doc:id="744549dc-1f74-480b-8aeb-74ffe891ea96">
 						<ee:message>
@@ -30,19 +31,111 @@ output application/json deferred=true, indent=false
 payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
 						</ee:message>
 					</ee:transform>
-						<foreach doc:name="for-each-file" doc:id="a44ea10e-a87c-4163-a0a9-ac215face628" >
-							<ee:transform doc:name="data-by-StoreId" doc:id="aad0500f-0023-49c5-aab7-16914fc68bd2" >
-								<ee:message >
-									<ee:set-payload ><![CDATA[output application/csv
----
-payload]]></ee:set-payload>
-								</ee:message>
-							</ee:transform>
-							<logger level="INFO" doc:name="Logger" doc:id="071ae3c6-89d9-47a2-9578-383f5111dfc1" message="#[payload]"/>
-						</foreach>
+						<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="d682936e-bfd6-414f-9299-6222fefe2f4c" name="create-success-records-subflow"/>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="batch-step-error-records" doc:id="64721d0a-a0b5-4fd3-8787-5c1e416bc08f" acceptExpression='#[!((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]' acceptPolicy="ALL">
+					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="fb6e4aef-ed33-4a58-8d06-4060c960d144" size="5" preserveMimeTypes="true">
+						<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="e1588395-9d56-4401-a385-8914daba8279" name="create-error-records-subflow"/>
 					</batch:aggregator>
 				</batch:step>
 			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="3159be8a-81b7-4a77-aed5-a185bef33a61" message="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]"/>
+			</batch:on-complete>
 		</batch:job>
 	</flow>
+	<sub-flow name="create-success-records-subflow" doc:id="95f78330-1363-4c67-9a80-7483f192ad74" >
+		<foreach doc:name="For Each" doc:id="8ba7b7d9-a421-4666-84a0-7d3400a2659d">
+							<ee:transform doc:name="set-variable-fileName" doc:id="cea6b817-1348-407f-ae82-7bcb4709789e" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+output application/json
+---
+("inventory_" ++ payload[0].StoreId ++"_" ++ now() as Date ++ ".csv")]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+			<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="02dc2665-97c9-4356-9052-75828792f8f5" objectStore="Object_store1" target="storedFileName" />
+			<ee:transform doc:name="set-variable-flag" doc:id="0577cf49-2293-48f4-9cc3-97d45c655f34" >
+				<ee:message >
+				</ee:message>
+				<ee:variables >
+					<ee:set-variable variableName="flag" ><![CDATA[%dw 2.0
+output application/json
+---
+((vars.storedFileName default []) pluck($$ as String) )contains(vars.fileName)]]></ee:set-variable>
+				</ee:variables>
+			</ee:transform>
+						<choice doc:name="choice-write-append" doc:id="9df270ea-9364-4893-aef9-63931e2020c2">
+							<when expression="#[vars.flag]">
+								<sftp:write doc:name="write-into-an-existing-file" doc:id="7564bc18-b9b7-4be1-80ab-2111f138cdff" config-ref="SFTP_Config" path="#[p('sftp.targetPath') ++ vars.fileName]" mode="APPEND">
+									<sftp:content><![CDATA[#[output application/csv header=false
+---
+payload]]]></sftp:content>
+								</sftp:write>
+							</when>
+							<otherwise>
+								<sftp:write doc:name="write-a-new-file" doc:id="c7fd0f86-c2d8-400a-9cf4-b1ad11461805" config-ref="SFTP_Config" mode="APPEND" path='#["target/" ++ vars.fileName]'>
+							<sftp:content><![CDATA[#[output application/csv
+---
+payload]]]></sftp:content>
+						</sftp:write>
+									<logger level="INFO" doc:name="logger-new-file-created" doc:id="582dd068-4bd4-4b99-bafd-927852b2a12b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.fileName ++ &quot;has created at &quot; ++ p('sftp.targetPath')]" />
+									<os:store doc:name="store-fileName" doc:id="80ac847a-a6b0-4a97-b7c3-bb5841daf8a9" objectStore="Object_store1" key="#[vars.fileName]">
+							<os:value><![CDATA[#[true]]]></os:value>
+						</os:store>
+							</otherwise>
+						</choice>
+						</foreach>
+	</sub-flow>
+	<sub-flow name="create-error-records-subflow" doc:id="0b37703d-b0d2-48be-865c-8c4335985086" >
+		<ee:transform doc:name="create-error-csv" doc:id="29b790d0-b63b-4de0-9d37-7136fd0f06de" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+---
+payload]]></ee:set-payload>
+							</ee:message>
+							<ee:variables >
+				<ee:set-variable variableName="errorFilename" ><![CDATA[%dw 2.0
+output application/json
+---
+("errorRecords-" ++ (now()as Date as String) ++ ".csv")]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<os:retrieve-all doc:name="Retrieve all" doc:id="49a79ba7-2c89-4030-91d8-7fab09d7afe6" objectStore="Object_store1" target="storedFileName" />
+						
+						<ee:transform doc:name="set-variable-errorFlag" doc:id="f65a47a2-d1d0-4cc2-8347-88c1ceedde75" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="errorFlag" ><![CDATA[%dw 2.0
+output application/json
+---
+((vars.storedFileName default []) pluck($$ as String) )contains(vars.errorFilename)]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+						<choice doc:name="Choice" doc:id="43bd40d9-1bd8-4059-9c2a-ffa3d0132c48" >
+							<when expression="#[vars.errorFlag]">
+								<sftp:write doc:name="append-error-file" doc:id="c272844b-4902-4659-9481-ae1e955814ef" config-ref="SFTP_Config" path="#[p('sftp.errorPath') ++ vars.errorFilename]" mode="APPEND">
+									<sftp:content><![CDATA[#[output application/csv header=false
+---
+payload]]]></sftp:content>
+								</sftp:write>
+							</when>
+							<otherwise >
+								<sftp:write doc:name="write-error-file" doc:id="bf6266a9-77d4-4d81-ae3d-ac6797642258" config-ref="SFTP_Config" mode="APPEND" path="#[p('sftp.errorPath') ++ vars.errorFilename]">
+							<sftp:content><![CDATA[#[output application/csv
+---
+payload]]]></sftp:content>
+						</sftp:write>
+								<logger level="INFO" doc:name="logger-error-file-created" doc:id="2f270cd0-89d0-410d-8414-6bf2ad302d1b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.errorFilename ++ &quot;has created at &quot; ++ p('sftp.targetPath')]"/>
+								<os:store doc:name="Store" doc:id="c0c60eec-e87d-4663-9e08-54000f56a7a9" objectStore="Object_store1" key="#[vars.errorFilename]">
+							<os:value><![CDATA[#[true]]]></os:value>
+						</os:store>
+							</otherwise>
+						</choice>
+	</sub-flow>
 </mule>

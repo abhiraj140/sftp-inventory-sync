@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
 	<flow name="schedulerFlow" doc:id="6d10c679-ad92-4a82-926b-5552a47386d1" >
 		<scheduler doc:name="everyday-scheduler-4am" doc:id="2eb34865-8000-4f0a-830e-170f2d70307d" >
 			<scheduling-strategy >
@@ -10,5 +11,13 @@
 			</scheduling-strategy>
 		</scheduler>
 		<flow-ref doc:name="flow-reference-sftp-inventory-sync-flow" doc:id="35f32b3c-6b4f-4c77-833b-58f963270075" name="sftp-inventory-sync-flow"/>
+	</flow>
+	<flow name="schedulerFlow1" doc:id="42c1aae0-5f8d-4631-a844-638ea7d4ea0a" >
+		<scheduler doc:name="Scheduler" doc:id="dc8fb71d-579b-41a7-a078-113c54e190aa" >
+			<scheduling-strategy >
+				<fixed-frequency timeUnit="MINUTES"/>
+			</scheduling-strategy>
+		</scheduler>
+		<os:clear doc:name="Clear" doc:id="62d2e4ff-2b63-462c-ada3-9e1e81862bc8" objectStore="Object_store1"/>
 	</flow>
 </mule>

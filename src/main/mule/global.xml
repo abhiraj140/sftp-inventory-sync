@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
-	xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
-http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
 	<sftp:config name="SFTP_Config" doc:name="SFTP Config" doc:id="73b375b0-bc8b-498d-bc69-1c17c0aad639" >
 		<sftp:connection host="${sftp.host}" port="${sftp.port}" username="${secure::sftp.user}" identityFile="${sftp.identityFile}" />
 	</sftp:config>
@@ -12,4 +13,5 @@ http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/sc
 	<configuration-properties doc:name="Configuration properties" doc:id="62503eb1-639d-41f9-8d39-31e3cebc6e1b" file="env/config-${mule.env}.properties" />
 	<global-property doc:name="Global Property" doc:id="4f5d419b-eb6b-459e-964b-502f06459ab5" name="mule.env" value="stage" />
 	<global-property doc:name="Global Property" doc:id="98767c67-90b7-4dc4-b275-5fddf0488c10" name="secret.key" value="LogEncrypt@Stage" />
+	<os:object-store name="Object_store1" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" />
 </mule>
