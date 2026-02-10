@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd">
+	<flow name="sftp-inventory-sync-flow" doc:id="35f86b6c-8b46-4ba1-9a0f-71380165b341" >
+		<sftp:read doc:name="read-full-inventory-data" doc:id="7e62d2a7-629e-49c7-a716-fcc73c79ccb2" config-ref="SFTP_Config" path='#["source/full_inventory_$(now() as Date as String).csv"]' outputMimeType='application/csv; bodystartlinenumber=1; headerlinenumber=0; streaming=true; separator=","; header=true' >
+			<non-repeatable-stream />
+		</sftp:read>
+		<ee:transform doc:name="convert-payload-to-json" doc:id="a543cc4b-19b7-4db5-8bc9-f65ad2657b36">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json deferred=true, indent=false
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="sftp-inventory-sync-batch-job" doc:id="5b11018a-7764-49c1-9152-07790d4710c9">
+			<batch:process-records>
+				<batch:step name="batch-step-valid-records" doc:id="3eaef80a-6c52-4dbf-a16d-987cbf0b3315" >
+					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="364a9622-4ded-4dc8-9ef1-c457bf2efa37" streaming="true" preserveMimeTypes="true">
+						<ee:transform doc:name="group-data-by-StoreId" doc:id="744549dc-1f74-480b-8aeb-74ffe891ea96">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json deferred=true, indent=false
+---
+payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+						<foreach doc:name="for-each-file" doc:id="a44ea10e-a87c-4163-a0a9-ac215face628" >
+							<ee:transform doc:name="data-by-StoreId" doc:id="aad0500f-0023-49c5-aab7-16914fc68bd2" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[output application/csv
+---
+payload]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<logger level="INFO" doc:name="Logger" doc:id="071ae3c6-89d9-47a2-9578-383f5111dfc1" message="#[payload]"/>
+						</foreach>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+		</batch:job>
+	</flow>
+</mule>

@@ -1,0 +1,76 @@
+name: Publish & Deploy Mule App (CloudHub 2.0)
+
+on:
+  push:
+    branches:
+      - development
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------------------------------
+      # Checkout source code
+      # ----------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------
+      # Cache Maven dependencies
+      # ----------------------------------------------------
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      # ----------------------------------------------------
+      # Setup Java 17 (required for Mule 4.9+ / CH2)
+      # ----------------------------------------------------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: 17
+
+      # ----------------------------------------------------
+      # Set dynamic app name & environment based on branch
+      # ----------------------------------------------------
+      - name: Resolve Environment & App Name
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "ENV_NAME=Prod" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+          else
+            echo "ENV_NAME=Staging" >> $GITHUB_ENV
+            echo "APP_NAME=${{ github.event.repository.name }}-stage" >> $GITHUB_ENV
+          fi
+
+      # ----------------------------------------------------
+      # Publish artifact to Anypoint Exchange
+      # ----------------------------------------------------
+      - name: Publish to Exchange
+        if: github.ref == 'refs/heads/development'
+        run: |
+          mvn deploy --settings .maven/settings.xml  -X \
+          -DskipMunitTests \
+          -DskipDeployment \
+          -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
+          -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}" 
+
+      # ----------------------------------------------------
+      # Deploy to CloudHub 2.0
+      # ----------------------------------------------------
+      - name: Deploy to CloudHub 2.0
+        run: |
+          mvn deploy --settings .maven/settings.xml \
+          -DskipMunitTests \
+          -DmuleDeploy \
+          -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
+          -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}" \
+          -Denv.name="${{ env.ENV_NAME }}" \
+          -Dapp.name="${{ env.APP_NAME }}"
