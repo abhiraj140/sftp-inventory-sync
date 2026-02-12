@@ -1,0 +1,13 @@
+%dw 2.0
+
+type auto_7334a351_3572_46f2_9c14_71aedf624123_Output_Attributes = org_mule_extensions_vm_api_VMMessageAttributes {"typeId": "org.mule.extensions.vm.api.VMMessageAttributes",
+"typeAlias": "VMMessageAttributes"} | Null
+type org_mule_extensions_vm_api_VMMessageAttributes = {|
+  correlationId?: String, 
+  queueName?: String, 
+  timestamp?: DateTime {"typeId": "java.time.LocalDateTime"}
+|} {"typeId": "org.mule.extensions.vm.api.VMMessageAttributes",
+"typeAlias": "VMMessageAttributes"}
+
+
+

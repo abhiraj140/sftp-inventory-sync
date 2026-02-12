@@ -1,0 +1,9 @@
+%dw 2.0
+
+type auto_7334a351_3572_46f2_9c14_71aedf624123_Output_Variables_storedFileName = { _?: java_io_Serializable {"typeId": "java.io.Serializable",
+  "typeAlias": "Serializable"} }
+type java_io_Serializable = {|  |} {"typeId": "java.io.Serializable",
+"typeAlias": "Serializable"}
+
+
+

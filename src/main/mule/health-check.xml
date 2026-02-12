@@ -22,11 +22,13 @@ http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/cu
 				<os:store doc:name="set-circuit-breaker-close" doc:id="69d0a93e-1301-4d3a-b416-5f8810318ef9" key="cb" objectStore="Object_store_cb">
 					<os:value ><![CDATA[#[false]]]></os:value>
 				</os:store>
+				<logger level="INFO" doc:name="logger-health-check-up" doc:id="29d48ac8-6905-4f0c-9f18-f61c3dad99ed" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;sFTP server is up and running.&quot;&#10;}]"/>
 			</when>
 			<otherwise >
 				<os:store doc:name="set-circuit-breaker-open" doc:id="c9a962db-a67e-4c78-ac4b-909b49a298e0" key="cb" objectStore="Object_store_cb">
 					<os:value ><![CDATA[#[true]]]></os:value>
 				</os:store>
+				<logger level="INFO" doc:name="logger-health-check-up" doc:id="a3d324c2-6633-4a8d-bb25-d537df8e793f" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;sFTP server is down.&quot;&#10;}]"/>
 			</otherwise>
 		</choice>
 	</flow>

@@ -1,0 +1,13 @@
+%dw 2.0
+
+type auto_7334a351_3572_46f2_9c14_71aedf624123_Output_Variables_record = {|
+  message: org_mule_runtime_api_message_Message {"typeId": "org.mule.runtime.api.message.Message"}, 
+  variables: {|  |}
+|}
+type org_mule_runtime_api_message_Message = {|
+  payload: Any, 
+  attributes: Null
+|} {"typeId": "org.mule.runtime.api.message.Message"}
+
+
+

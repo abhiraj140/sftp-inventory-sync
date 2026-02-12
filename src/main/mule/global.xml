@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
-	xmlns:os="http://www.mulesoft.org/schema/mule/os"
-	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
 http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
 http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
 http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
-http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
 	<sftp:config name="SFTP_Config" doc:name="SFTP Config" doc:id="73b375b0-bc8b-498d-bc69-1c17c0aad639" >
 		<sftp:connection host="${sftp.host}" port="${sftp.port}" username="${secure::sftp.user}" identityFile="${sftp.identityFile}" />
 	</sftp:config>
@@ -15,18 +16,36 @@ http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/em
 	<configuration-properties doc:name="Configuration properties" doc:id="62503eb1-639d-41f9-8d39-31e3cebc6e1b" file="env/config-${mule.env}.properties" />
 	<global-property doc:name="Global Property" doc:id="4f5d419b-eb6b-459e-964b-502f06459ab5" name="mule.env" value="stage" />
 	<global-property doc:name="Global Property" doc:id="98767c67-90b7-4dc4-b275-5fddf0488c10" name="secret.key" value="LogEncrypt@Stage" />
-	<os:object-store name="Object_store1" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
+	<os:object-store name="Object_store_no_file" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
+	<os:object-store name="Object_store1" doc:name="Object store" doc:id="f53345b5-8434-4f51-b728-a9f0bcf32199" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
 	<os:object-store name="Object_store_cb" doc:name="Object store" doc:id="1fc77b00-b5a2-45cc-b4db-196a8d16e074" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
 	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="76c29043-c560-4c4d-9b42-910ca8d7cecc" >
 		<jms:active-mq-connection username="${jms.user}" password="${secure::jms.password}" >
+			<reconnection >
+				<reconnect frequency="${retry.frequency}" count="${retry.attempt}" />
+			</reconnection>
 			<jms:factory-configuration brokerUrl="${jms.brocker.url}" maxRedelivery="${jms.maxRedelivery}"/>
 		</jms:active-mq-connection>
 	</jms:config>
 	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="72bf071f-0345-4141-9a2f-29f29e5ac376" >
 		<email:smtp-connection host="${smtp.host}" port="${smtp.port}" user="${smtp.user}" password="${secure::smtp.password}">
+			<reconnection >
+				<reconnect frequency="${retry.frequency}" count="${retry.attempt}" />
+			</reconnection>
 			<email:properties >
 				<email:property key="mail.smtp.starttls.enable" value="true" />
 			</email:properties>
 		</email:smtp-connection>
 	</email:smtp-config>
+	<vm:config name="VM_Config_reprocess" doc:name="VM Config" doc:id="8a68badc-8e79-4757-9a09-3be7f3440e35">
+		<vm:connection >
+			<reconnection >
+				<reconnect frequency="${retry.attempt}" count="${retry.frequency}" />
+			</reconnection>
+		</vm:connection>
+		<vm:queues >
+			<vm:queue queueName="${vm.queue}" maxOutstandingMessages="${vm.max.outstanding}" />
+			<vm:queue queueName="${vm.errorQueue}" maxOutstandingMessages="${vm.max.outstanding}" />
+		</vm:queues>
+	</vm:config>
 </mule>

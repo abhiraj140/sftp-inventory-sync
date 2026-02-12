@@ -38,7 +38,7 @@ output application/json deferred=true, indent=false
 payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
 						</ee:message>
 					</ee:transform>
-						<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="d682936e-bfd6-414f-9299-6222fefe2f4c" name="create-success-records-subflow"/>
+						<flow-ref doc:name="flow-reference-create-success-records-for-each-subflow" doc:id="d682936e-bfd6-414f-9299-6222fefe2f4c" name="create-success-records-for-each-subflow"/>
 					</batch:aggregator>
 				</batch:step>
 				<batch:step name="batch-step-error-records" doc:id="64721d0a-a0b5-4fd3-8787-5c1e416bc08f" acceptExpression='#[!((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]' acceptPolicy="ALL">
@@ -48,7 +48,7 @@ payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
 				</batch:step>
 			</batch:process-records>
 			<batch:on-complete >
-				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="3159be8a-81b7-4a77-aed5-a185bef33a61" message="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]"/>
+				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="3159be8a-81b7-4a77-aed5-a185bef33a61" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Batch Job Completed&quot;&#10;}]"/>
 				<os:retrieve-all doc:name="retrieve the success" doc:id="8069455b-0e40-4caa-afab-06ae8f045985" objectStore="Object_store1" target="success"/>
 				<os:retrieve-all doc:name="Retrieve all" doc:id="db17a82e-ae8a-44da-b1d9-d707bc958dbb" objectStore="Object_store_cb" target="cbStatus"/>
 				<ee:transform doc:name="Transform Message" doc:id="fbad078b-a981-473c-b250-1ddad664cb35" >
@@ -159,22 +159,26 @@ payload]]></ee:set-payload>
 			</batch:on-complete>
 		</batch:job>
 	</flow> -->
-	<sub-flow name="create-success-records-subflow" doc:id="95f78330-1363-4c67-9a80-7483f192ad74" >
+	<sub-flow name="create-success-records-for-each-subflow" doc:id="95f78330-1363-4c67-9a80-7483f192ad74" >
 		<foreach doc:name="For Each" doc:id="8ba7b7d9-a421-4666-84a0-7d3400a2659d">
-							<ee:transform doc:name="set-variable-fileName" doc:id="cea6b817-1348-407f-ae82-7bcb4709789e" >
-				<ee:message >
+			<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="2db034a7-b3c8-4d07-8197-b05997855a0f" name="create-success-records-subflow"/>
+						</foreach>
+	</sub-flow>
+	<sub-flow name="create-success-records-subflow" doc:id="89dfc619-bbd9-4e2f-aac7-96e858351355" >
+		<ee:transform doc:name="set-variable-fileName" doc:id="cea6b817-1348-407f-ae82-7bcb4709789e">
+				<ee:message>
 				</ee:message>
-				<ee:variables >
-					<ee:set-variable variableName="fileName" ><![CDATA[%dw 2.0
+				<ee:variables>
+					<ee:set-variable variableName="fileName"><![CDATA[%dw 2.0
 output application/json
 ---
 ("inventory_" ++ payload[0].StoreId ++"_" ++ now() as Date ++ ".csv")]]></ee:set-variable>
 				</ee:variables>
 			</ee:transform>
-			<os:retrieve doc:name="retrieve-cb-status" doc:id="7add15f2-3d1e-410f-a5e0-bba821b58ed3" key="cb" objectStore="Object_store_cb" target="cb">
-				<os:default-value ><![CDATA[#[false]]]></os:default-value>
+		<os:retrieve doc:name="retrieve-cb-status" doc:id="7add15f2-3d1e-410f-a5e0-bba821b58ed3" key="cb" objectStore="Object_store_cb" target="cb">
+				<os:default-value><![CDATA[#[false]]]></os:default-value>
 			</os:retrieve>
-			<choice doc:name="Choice" doc:id="a3fd2859-18a7-4a93-8f68-8fe1f41a249a" >
+		<choice doc:name="Choice" doc:id="a3fd2859-18a7-4a93-8f68-8fe1f41a249a">
 				<when expression="#[vars.cb]">
 					<ee:transform doc:name="error-csv-payload" doc:id="debbc200-a6c3-4efd-a2ed-13b784d8f771">
 						<ee:message>
@@ -188,7 +192,7 @@ payload]]></ee:set-payload>
 						<jms:message outboundContentType="application/csv" />
 					</jms:publish>
 				</when>
-				<otherwise >
+				<otherwise>
 					<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="02dc2665-97c9-4356-9052-75828792f8f5" objectStore="Object_store1" target="storedFileName" />
 					<ee:transform doc:name="set-variable-flag" doc:id="0577cf49-2293-48f4-9cc3-97d45c655f34">
 				<ee:message>
@@ -204,10 +208,9 @@ output application/json
 p('sftp.targetPath') ++ vars.fileName]]></ee:set-variable>
 				</ee:variables>
 			</ee:transform>
-					<flow-ref doc:name="flow-reference-sftp-write-valid-records-subflow" doc:id="5caa3af8-6738-493a-ac36-bccde9ae7a39" name="sftp-write-valid-records-subflow"/>
+					<flow-ref doc:name="flow-reference-sftp-write-valid-records-subflow" doc:id="5caa3af8-6738-493a-ac36-bccde9ae7a39" name="sftp-write-valid-records-subflow" />
 				</otherwise>
 			</choice>
-						</foreach>
 	</sub-flow>
 	<sub-flow name="create-error-records-subflow" doc:id="0b37703d-b0d2-48be-865c-8c4335985086" >
 		<ee:transform doc:name="create-error-csv" doc:id="29b790d0-b63b-4de0-9d37-7136fd0f06de" >
@@ -276,7 +279,7 @@ payload]]></ee:set-payload>
 						</ee:message>
 					</ee:transform>
 					<flow-ref doc:name="flow-reference-sftp-write-subflow" doc:id="ff5512d9-9996-465d-a881-970edd09c469" name="sftp-write-subflow" />
-					<logger level="INFO" doc:name="logger-new-file-created" doc:id="582dd068-4bd4-4b99-bafd-927852b2a12b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.fileName ++ &quot;has created at &quot; ++ p('sftp.targetPath')]" />
+					<logger level="INFO" doc:name="logger-new-file-created" doc:id="582dd068-4bd4-4b99-bafd-927852b2a12b" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;New file has created&quot;,&#10;	&quot;filename&quot;: (vars.fileName ++ &quot;has created at &quot; ++ p('sftp.targetPath')) default &quot;&quot;&#10;}]" />
 				<flow-ref doc:name="flow-reference-store-new-fileName-subflow" doc:id="97aa329b-6c1f-48f7-896b-3ca6af1e47d3" name="store-new-fileName-subflow"/>
 							</otherwise>
 						</choice>

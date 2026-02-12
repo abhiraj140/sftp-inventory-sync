@@ -13,15 +13,19 @@ http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/
 				<cron expression="${cron}" />
 			</scheduling-strategy>
 		</scheduler>
+		<logger level="INFO" doc:name="logger-start" doc:id="834df981-f625-46b6-82a9-4c33c7e0e039" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;inventory-data-sync-scheduler started&quot;&#10;	&#10;}]"/>
 		<flow-ref doc:name="flow-reference-sftp-inventory-sync-flow" doc:id="35f32b3c-6b4f-4c77-833b-58f963270075" name="sftp-inventory-sync-flow"/>
+		<error-handler ref="global-error-handler" />
 	</flow>
-	<flow name="reprocess-failed-scheduer" doc:id="58a74974-709c-413d-8029-2368454f592e" >
-		<scheduler doc:name="Scheduler" doc:id="698c5a74-5170-4178-ae6b-cdc7fefd3786" >
+	<flow name="reprocess-failed-scheduer" doc:id="58a74974-709c-413d-8029-2368454f592e" maxConcurrency="1">
+		<scheduler doc:name="reprocess-scheduler" doc:id="698c5a74-5170-4178-ae6b-cdc7fefd3786" disallowConcurrentExecution="true">
 			<scheduling-strategy >
-				<fixed-frequency startDelay="50" timeUnit="MINUTES"/>
+				<fixed-frequency timeUnit="DAYS" startDelay="100"/>
 			</scheduling-strategy>
 		</scheduler>
-		<flow-ref doc:name="Flow Reference" doc:id="79f47ea4-f05a-4f62-a5bd-2900e4c744a2" name="reprocess-failed-flow"/>
+		<logger level="INFO" doc:name="logger-start" doc:id="6477368a-d4ad-4069-9384-0f8c4a154428" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;reprocess-failed-scheduer started&quot;&#10;	&#10;}]"/>
+		<flow-ref doc:name="flow-reference-reprocess-failed-flow" doc:id="79f47ea4-f05a-4f62-a5bd-2900e4c744a2" name="reprocess-failed-flow"/>
+		<error-handler ref="global-error-handler" />
 	</flow>
 	<flow name="health-check-scheduler" doc:id="8fde2d94-08aa-4451-8bc5-a75659c2fa9e">
 		<scheduler doc:name="Scheduler" doc:id="01b08744-94fa-423d-aa1c-e90f19260197" >
@@ -29,234 +33,8 @@ http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/
 				<fixed-frequency startDelay="50" timeUnit="MINUTES"/>
 			</scheduling-strategy>
 		</scheduler>
+		<logger level="INFO" doc:name="logger-start" doc:id="4f17377f-c762-4759-87aa-632b44a9571a" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;health-check-scheduler has started&quot;&#10;	&#10;}]"/>
 		<flow-ref doc:name="flow-reference-health-check-flow" doc:id="4d2439f1-e4bc-4676-9e59-f1c7b2607cc0" name="health-check-flow" />
-	</flow>
-	<flow name="schedulerFlow" doc:id="ff35ea7c-12a4-4afa-87b0-f0104eb46848" >
-		<scheduler doc:name="Scheduler" doc:id="d4898569-22a6-4f6b-8fa1-30dbf4debf99" >
-			<scheduling-strategy >
-				<fixed-frequency timeUnit="MINUTES" startDelay="30"/>
-			</scheduling-strategy>
-		</scheduler>
-		<ee:transform doc:name="Transform Message" doc:id="d88065e8-12f0-4747-84ae-a498e936ae5e" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
-output application/csv
----
-[
-  {
-    "SKU": "557120HWRGSE02",
-    "StoreId": "WHBKS",
-    "Type": "Standard",
-    "Quantity": "1.2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "342320HFKDS03",
-    "StoreId": "WHBKS",
-    "Type": "Backorder",
-    "Quantity": "-2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "112820SOPAAE01",
-    "StoreId": "MHBKS",
-    "Type": "Backorder",
-    "Quantity": "18",
-    "Timestamp": ""
-  },
-  {
-    "SKU": "112820SOPAAE01",
-    "StoreId": "MBVTS",
-    "Type": "",
-    "Quantity": "5",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "342320HFKDS03",
-    "StoreId": "MHBKS",
-    "Type": "Backorder",
-    "Quantity": "2a",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "342320HFKDS03",
-    "StoreId": "",
-    "Type": "Backorder",
-    "Quantity": "1",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "112820SOPAAE01",
-    "StoreId": "",
-    "Type": "Backorder",
-    "Quantity": "3.2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "557120HWRGSE02",
-    "StoreId": "MPVN",
-    "Type": "Standards",
-    "Quantity": "12",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "",
-    "StoreId": "MTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "9921f5cccbb940",
-    "StoreId": "MHBKS",
-    "Type": "Standard",
-    "Quantity": "7.8",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "92315a6ac6414c",
-    "StoreId": "",
-    "Type": "Standard",
-    "Quantity": "5.5",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "e11cc6b0eb374c",
-    "StoreId": "",
-    "Type": "Standard",
-    "Quantity": "1",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "c2352958bc9049",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2a",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "68869141bb1744",
-    "StoreId": "",
-    "Type": "Backorder",
-    "Quantity": "3",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "0f4cdb411d954a",
-    "StoreId": "MBVTS",
-    "Type": "Stndard",
-    "Quantity": "8",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "0624153cbd7d4e",
-    "StoreId": "WHBKS",
-    "Type": "Stndard",
-    "Quantity": "7",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "cd4cf7aeef904a",
-    "StoreId": "MGFSS",
-    "Type": "Backrder",
-    "Quantity": "3",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "8791508876684b",
-    "StoreId": "TPVN",
-    "Type": "Bacorder",
-    "Quantity": "1",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "b7d61c4c819246",
-    "StoreId": "UTHSW",
-    "Type": "Stanard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "de56d48d8c1342",
-    "StoreId": "MGFSS",
-    "Type": "Standard",
-    "Quantity": "4",
-    "Timestamp": ""
-  }
-]]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
-		<jms:publish doc:name="Publish" doc:id="2842fbaa-d045-4263-9549-3bcca9b95495" config-ref="JMS_Config" destination="failedErrorQueue"/>
-		<ee:transform doc:name="Transform Message" doc:id="52995adf-c2ea-4113-9fe7-ac3ae9e3f245" >
-			<ee:message >
-				<ee:set-payload ><![CDATA[%dw 2.0
-output application/csv
----
-[
-  {
-    "SKU": "112820SOPAAE01",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "05ce8c93dcd645",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "7b3ec1ea2ba94a",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "9873aa518ef849",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "9b6ae06260bc4d",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  },
-  {
-    "SKU": "1986f2161f0547",
-    "StoreId": "UTHSW",
-    "Type": "Standard",
-    "Quantity": "2",
-    "Timestamp": "12/13/23 20:39"
-  }
-]]]></ee:set-payload>
-			</ee:message>
-		</ee:transform>
-		<jms:publish doc:name="Publish" doc:id="0ff94280-e50a-4245-9d4e-eb64947b1b8e" config-ref="JMS_Config" destination="failedValidQueue"/>
-	</flow>
-	<flow name="schedulerFlow2" doc:id="ebc112c3-6374-4fc3-aade-bf00edb2e17d" >
-		<scheduler doc:name="Scheduler" doc:id="5dad4321-b233-48b5-b0fa-cbae4d8dfbfe" >
-			<scheduling-strategy >
-				<fixed-frequency startDelay="30" timeUnit="MINUTES"/>
-			</scheduling-strategy>
-		</scheduler>
-		<os:retrieve-all doc:name="Retrieve all" doc:id="8c92ff57-8eed-4c57-952d-1c1d6c82e3af" objectStore="Object_store_cb" target="cb"/>
-		<os:retrieve-all doc:name="Retrieve all" doc:id="012e79de-b887-420e-be62-6909ac9637a2" objectStore="Object_store1"/>
-		<logger level="INFO" doc:name="Logger" doc:id="5698a298-8f71-4bbc-af24-395c8a7a96ea" />
-	</flow>
-	<flow name="schedulerFlow1" doc:id="42c1aae0-5f8d-4631-a844-638ea7d4ea0a">
-		<scheduler doc:name="Scheduler" doc:id="dc8fb71d-579b-41a7-a078-113c54e190aa" >
-			<scheduling-strategy >
-				<fixed-frequency timeUnit="HOURS" startDelay="10"/>
-			</scheduling-strategy>
-		</scheduler>
-		<os:clear doc:name="Clear" doc:id="62d2e4ff-2b63-462c-ada3-9e1e81862bc8" objectStore="Object_store1"/>
-		<os:clear doc:name="Clear" doc:id="455bc849-a131-4963-ae6c-b6cad8891caf" objectStore="Object_store_cb"/>
+		<error-handler ref="global-error-handler" />
 	</flow>
 </mule>

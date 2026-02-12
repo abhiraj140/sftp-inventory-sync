@@ -1,22 +1,90 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:os="http://www.mulesoft.org/schema/mule/os"
-	xmlns="http://www.mulesoft.org/schema/mule/core"
-	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:jms="http://www.mulesoft.org/schema/mule/jms" xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
-http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd">
 	<flow name="reprocess-failed-flow" doc:id="31f01bbf-469e-4cda-a6bd-ed2dfe2da1bb" >
-		<flow-ref doc:name="flow-reference-health-check-connection-test-subflow" doc:id="c74979fb-862a-4a83-9a8c-10073eecd499" name="health-check-connection-test-subflow" />
+		<flow-ref doc:name="flow-reference-health-check-flow-subflow" doc:id="c74979fb-862a-4a83-9a8c-10073eecd499" name="health-check-flow" />
 		<choice doc:name="Choice" doc:id="9e62dcad-04e0-4b59-bedd-f689ead30bba" >
 			<when expression="#[(vars.healthCheck)]">
-				<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="e6f3e7b4-37ed-46fd-ba32-932c286176e0" objectStore="Object_store1" target="storedFileName"/>
+				<async doc:name="Async" doc:id="20a3ae24-4821-4a32-929e-45a3dd1c0454" >
+					<flow-ref doc:name="flow-reference-reprocess-valid-failed-records-flow" doc:id="fa41791e-166e-4f1a-9db4-fd8c8c477efe" name="reprocess-valid-failed-records-flow"/>
+					</async>
 			</when>
-			<otherwise >
-				<flow-ref doc:name="Flow Reference" doc:id="6570bb9e-46f9-4c76-bff1-02e37ac51067" name="reprocess-valid-failed-records-subflow"/>
+			<otherwise>
+				<logger level="INFO" doc:name="Logger" doc:id="d55446bd-f253-4709-aff0-1e894ec31f0f" />
 			</otherwise>
 		</choice>
 	</flow>
-	<sub-flow name="reprocess-valid-failed-records-subflow" doc:id="ff0a2ce8-f188-44a4-b904-553c089ea04d" >
-		<logger level="INFO" doc:name="Logger" doc:id="dfb4e12c-f593-471c-9854-ae9eeebe6a73" />
-	</sub-flow>
+	<flow name="reprocess-valid-failed-records-flow" doc:id="7334a351-3572-46f2-9c14-71aedf624123" >
+		<vm:listener doc:name="Listener" doc:id="a312207f-87c1-43bd-a80f-e7f230d8b31d" config-ref="VM_Config_reprocess" numberOfConsumers="1" queueName="reprocess"/>
+		<set-variable value="#[p('jms.validQueue')]" doc:name="set-variable-queueName" doc:id="cff3fb7f-3500-4435-93bb-8b28b94d0ed1" variableName="queueName"/>
+		<os:retrieve doc:name="retrieve-cb-status" doc:id="8ce88ce9-097b-494e-84ad-bac1b61db0f0" key="cb" objectStore="Object_store_cb" target="cb">
+				<os:default-value><![CDATA[#[false]]]></os:default-value>
+			</os:retrieve>
+		<try doc:name="Try" doc:id="5caf2fbf-233d-4fc1-8f63-5a5ff123db9d">
+			<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="f69c9fdf-121c-463e-a141-6593f1b299d6" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="ba7846e9-099e-4770-ae71-fec31bcd8a12">
+			<jms:consume doc:name="jms-consume-valid-messages" doc:id="3fa3193b-2b51-4c33-9280-3d723af24aa9" config-ref="JMS_Config" ackMode="IMMEDIATE" contentType="application/csv" destination="#[vars.queueName]">
+			<jms:consumer-type>
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:consume>
+			<error-handler ref="reprocess-error-handler" />
+		</try>
+		</until-successful>
+			<error-handler ref="reprocess-error-handler" />
+		</try>
+		<choice doc:name="Choice" doc:id="8e69f6ff-dfe3-4fe8-99d2-2d6c7383fe1d" >
+			<when expression="#[(vars.endOfQueue default false) or (vars.cb)]">
+				<logger level="INFO" doc:name="logger-end-of-reprocessing" doc:id="5f7639e9-39a4-43dd-b24f-44654977d442" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;End of reprocessing&quot;&#10;}]"/>
+				<remove-variable doc:name="remove-variable-endOfQueue" doc:id="3258f512-7b86-4d42-a3bc-912777dc967f" variableName="endOfQueue"/>
+				<flow-ref doc:name="flow-reference-reprocess-error-failed-records-flow" doc:id="80f37bb4-e198-42ad-bd3b-9ca520502ac4" name="reprocess-error-failed-records-flow"/>
+				
+			</when>
+			<otherwise >
+				<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="6aa9351b-7330-4846-bc7c-3dadeddc5daf" name="create-success-records-subflow"/>
+				<vm:publish queueName="reprocess" doc:name="recursive-call" doc:id="0843548e-4540-49a7-a6ca-676cfee93817" config-ref="VM_Config_reprocess"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="reprocess-error-failed-records-flow" doc:id="3b032152-7140-4af1-82db-5b3d00f6a7c3" >
+		<vm:listener doc:name="Listener" doc:id="e20062f1-6ced-429e-87ca-436b4307c615" config-ref="VM_Config_reprocess" numberOfConsumers="1" queueName="reprocessError"/>
+		<set-variable value="#[p('jms.errorQueue')]" doc:name="set-variable-queueName" doc:id="5699f22f-7736-4970-97ae-fdf679ab943e" variableName="queueName"/>
+		<os:retrieve doc:name="retrieve-cb-status" doc:id="ba46caf3-0530-4f35-9dac-4a38cd90faeb" key="cb" objectStore="Object_store_cb" target="cb">
+				<os:default-value><![CDATA[#[false]]]></os:default-value>
+			</os:retrieve>
+		<choice doc:name="Choice" doc:id="bcbae038-9c22-4020-a7b5-1fe4e478e667" >
+			<when expression="#[!((vars.cb))]">
+				<try doc:name="Try" doc:id="8c4c400f-473f-44a3-9366-eacd3fd02396">
+			<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="2c0f5565-e190-42bb-aebd-f1710857d9fa" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="fbcb504e-a149-4aef-95be-7be7f764a24a">
+			<jms:consume doc:name="jms-consume-valid-messages" doc:id="ab17c03c-16a0-4521-bc35-1a5d4028ea4d" config-ref="JMS_Config" ackMode="IMMEDIATE" contentType="application/csv" destination="#[vars.queueName]">
+			<jms:consumer-type>
+				<jms:queue-consumer />
+			</jms:consumer-type>
+		</jms:consume>
+			<error-handler ref="reprocess-error-handler" />
+		</try>
+		</until-successful>
+			<error-handler ref="reprocess-error-handler" />
+		</try>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="logger-circuit-breaker-is-open" doc:id="e7f7ff96-1bab-405c-8272-c2bfee2ac2d6" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Circuit Breaker is open&quot;&#10;}]"/>
+			</otherwise>
+		</choice>
+		<choice doc:name="Choice" doc:id="64241b45-a772-4528-bef0-d23ae4e64454" >
+			<when expression="#[(vars.endOfQueue default false) or (vars.cb)]">
+				<logger level="INFO" doc:name="logger-end-of-reprocessing" doc:id="29635cf6-84f0-4b20-98b9-61411791b112" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;End of reprocessing&quot;&#10;}]"/>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="flow-reference-create-error-records-subflow" doc:id="58fc2276-942d-4c38-a756-efe5fc914db7" name="create-error-records-subflow"/>
+				<vm:publish queueName="reprocessError" doc:name="recursive-call" doc:id="b80cb9ee-c698-42bd-94b4-a650aa9a1a49" config-ref="VM_Config_reprocess"/>
+			</otherwise>
+		</choice>
+	</flow>
 </mule>

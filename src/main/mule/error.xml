@@ -9,7 +9,51 @@ http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/em
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
 	<error-handler name="global-error-handler" doc:id="1eebb3a5-11d9-43e6-b36e-b641cbc53a9b" >
 		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="f3cc510e-018e-423c-a01f-1054ccb5146b" >
-			<logger level="INFO" doc:name="Logger" doc:id="9ad409a0-8405-4816-804c-20c3ea85571e" message='#["error logged as: " ++ error.description]'/>
+			<logger level="INFO" doc:name="logger-generic-error" doc:id="9ad409a0-8405-4816-804c-20c3ea85571e" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;sftp-inventory-sync has failed with an error&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+					<os:retrieve doc:name="retrieve-illegalPath" doc:id="9001bdc8-267f-4145-a72a-3e5c70ded3a0" key="illegalPath" target="illegalPath" objectStore="Object_store_no_file">
+				<os:default-value ><![CDATA[false]]></os:default-value>
+			</os:retrieve>
+			<choice doc:name="Choice" doc:id="4843fdae-1a86-434f-ab90-8e91ef2ba60c" >
+				<when expression="#[!(vars.illegalPath)]">
+					<ee:transform doc:name="generic-error-email-payload" doc:id="7e545e1d-57f6-4f66-928d-5211e7b39914">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+"Hi Team,
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by an integration error. 
+
+Error Summary:
+-------------------------------------------
+"
+++
+"CorrelationId: " ++ correlationId ++"\nFailing Component: " ++ write(error.failingComponent) ++ "\n Error: " ++ write(error,"application/java")
+++
+"
+
+Regards,
+Mulesoft Integration"]]></ee:set-payload>
+						</ee:message>
+						<ee:variables>
+							<ee:set-variable variableName="cbOpen"><![CDATA[%dw 2.0
+output application/java
+---
+true]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<email:send doc:name="send-email-generic-error" doc:id="a1bbe528-99f7-43db-acc5-3538efa6285f" config-ref="Email_SMTP" fromAddress="${smtp.user}" subject='#["ERROR::Inventory Sync Failure - Oracle WMS to SFCC - "++ (now() as String {format: "MM-dd-yy"})]'>
+					<email:to-addresses>
+						<email:to-address value="#[p('smtp.receiver')]" />
+					</email:to-addresses>
+					<email:body contentType="text/plain" />
+				</email:send>
+				</when>
+				<otherwise >
+					<os:store doc:name="reset-illegalPath" doc:id="5ee66dbb-cd8d-4912-9db6-d794ab3e811d" key="illegalPath" objectStore="Object_store_no_file">
+						<os:value ><![CDATA[#[false]]]></os:value>
+					</os:store>
+				</otherwise>
+			</choice>
 		</on-error-propagate>
 	</error-handler>
 	<error-handler name="health-check-error-handler" doc:id="77d6d8a6-8017-4714-942d-ff04f4f3347f" >
@@ -37,7 +81,8 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 							<ee:set-payload><![CDATA[%dw 2.0
 output application/java
 ---
-"The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error. 
+"Hi Team,
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error. 
 Operations will remain paused until the connection is restored. 
 In the interim, all pending records are being backed up for subsequent reprocessing.
 
@@ -71,6 +116,43 @@ true]]></ee:set-variable>
 				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="9c86232b-869f-4b54-8b9e-e41342a48f46" type="SFTP:CONNECTIVITY, SFTP:FILE_LOCK">
 					<logger level="INFO" doc:name="logger-coonectivity-error" doc:id="9d58142b-993c-4420-8d12-898c89cf4bb0" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
 				</on-error-propagate>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5999823b-3038-41fa-b83b-74cfc43a4a14" type="SFTP:ILLEGAL_PATH">
+			<os:retrieve doc:name="Retrieve" doc:id="0b26cf91-c197-440e-9a4c-9a8be14f4c3e" objectStore="Object_store_no_file" key="illegalPath" target="illegalPath">
+				<os:default-value ><![CDATA[#[false]]]></os:default-value>
+			</os:retrieve>
+			<choice doc:name="Choice" doc:id="da4584bc-000f-464e-b2eb-97bb6696fe3f" >
+				<when expression="#[!(vars.illegalPath)]">
+					<logger level="INFO" doc:name="Logger" doc:id="c31473d5-1639-4d5c-bce6-08d4fcc8e978" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation(file not available).&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]" />
+					<email:send doc:name="send-email-file-missing" doc:id="b9014737-e714-4020-ba2a-cfbfd2371a2c" config-ref="Email_SMTP" fromAddress="${smtp.user}" subject='#["ERROR::Inventory Sync Failure - Oracle WMS to SFCC - "++ (now() as String {format: "MM-dd-yy"})]'>
+					<email:to-addresses >
+						<email:to-address value="#[p('smtp.receiver')]" />
+					</email:to-addresses>
+					<email:body contentType="text/plain" >
+							<email:content ><![CDATA[#[output application/java
+---
+"Hi Team,
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by a sFTP error. 
+The Full Inventory file is missing at the source SFTP location
+
+Error Summary:
+-------------------------------------------
+"
+++
+"CorrelationId: " ++ correlationId ++"\nsource filename: "++ (p('sftp.source')++"full_inventory_" ++ (now()as String {format: "MM-dd-YY"}) ++".csv")++"\nFailing Component: " ++ write(error.failingComponent) ++ "\n Error: " ++ write(error,"application/java")
+++
+"
+
+Regards,
+Mulesoft Integration"]]]></email:content>
+						</email:body>
+				</email:send>
+					<set-variable value="#[true]" doc:name="set-variable-illegalPath" doc:id="293eb54c-8ab0-4d12-accf-05d0e50c8841" variableName="illegalPath"/>
+					<os:store doc:name="store-illegalPath" doc:id="cdc1a067-d38b-424d-ae7b-c969d2618727" key="illegalPath" objectStore="Object_store_no_file">
+						<os:value ><![CDATA[#[true]]]></os:value>
+					</os:store>
+				</when>
+			</choice>
+		</on-error-propagate>
 		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="5c8937fd-a5c5-4f21-99bb-251d24e5074a" type="ANY">
 			<logger level="INFO" doc:name="error-logger" doc:id="0b24f8e8-daba-472a-893d-94e38529b397" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
 			<choice doc:name="Choice" doc:id="4a14c1ce-efda-49fd-af2f-9a37c427c482" >
@@ -83,4 +165,43 @@ true]]></ee:set-variable>
 			</choice>
 		</on-error-continue>
 			</error-handler>
+	<error-handler name="reprocess-error-handler" doc:id="1eecfff2-897d-4f1c-9eb9-1b2d1b88abce" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="13d17472-ae6a-4dd8-a141-53e8802def69" type="JMS:CONNECTIVITY">
+			<logger level="INFO" doc:name="logger-jms-connectivity-error" doc:id="3ca5230f-8023-49be-83b0-d656fb89de5e" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in jms connectivity.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+		</on-error-propagate>
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="339d37bf-bae6-4ffb-85c0-5a900f82dac5" type="MULE:RETRY_EXHAUSTED">
+			<logger level="INFO" doc:name="logger-jms-down" doc:id="5b578cf4-0ee0-4906-87e9-6ff10f375f07" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;JMS brocker is down&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+			<ee:transform doc:name="email-body" doc:id="add80b84-f148-4660-8227-d2633dcc082b" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+"Hi Team,
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by JMS Brocker downtime while reprocessing the records. 
+Operations will remain paused until the connection is restored. 
+In the interim, all pending records are being backed up for subsequent reprocessing.
+
+Error Summary:
+-------------------------------------------
+"
+++
+"CorrelationId: " ++ correlationId ++"\nFailing Component: " ++ write(error.failingComponent) ++ "\n Error: " ++ write(error,"application/java")
+++
+"
+
+Regards,
+Mulesoft Integration"]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<email:send doc:name="send-email-jms-down" doc:id="49bc6c41-ef44-45a3-a1ca-d48a9b1de482" config-ref="Email_SMTP" fromAddress="${smtp.user}" subject='#["ERROR::Inventory Sync Failure - Oracle WMS to SFCC - "++ (now() as String {format: "MM-dd-yy"})]'>
+					<email:to-addresses >
+						<email:to-address value="#[p('smtp.receiver')]" />
+					</email:to-addresses>
+					<email:body contentType="text/plain" />
+				</email:send>
+		</on-error-continue>
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="0df42059-7493-45b2-b5cd-9be87f0a38eb" type="JMS:TIMEOUT">
+			<set-variable value="#[true]" doc:name="set-variable-end-of-queue" doc:id="51a9af4e-f439-4ef3-bbec-42b49ad12d6c" variableName="endOfQueue"/>
+		</on-error-continue>
+	</error-handler>
 </mule>
