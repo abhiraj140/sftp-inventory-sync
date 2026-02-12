@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<sub-flow name="health-check-connection-test-subflow" doc:id="e3d08a86-6bdf-4d36-9c9a-6b9c99023102" >
+		<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="26a6f648-70ee-4bae-a043-f1ea01efee30" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="e2b7c3f8-3079-4993-b964-795014b611af">
+			<sftp:list doc:name="list-source-folder" doc:id="658e3f1c-7c92-485a-914b-d9ef3b0cccae" config-ref="SFTP_Config" directoryPath="${sftp.source}" />
+				<error-handler ref="health-check-error-handler" />
+		</try>
+		</until-successful>
+		<set-variable value="#[true]" doc:name="set-variable-healthCheck" doc:id="5bb66adb-b8b2-48c6-9d02-38803f5514f2" variableName="healthCheck" />
+	</sub-flow>
+	<flow name="health-check-flow" doc:id="11bf698a-f239-45e6-99fe-e4b0f4eb87b0" >
+		<flow-ref doc:name="flow-reference-health-check-connection-test-subflow" doc:id="c5fb06bf-bebe-4940-b320-af5e484767ab" name="health-check-connection-test-subflow"/>
+		<choice doc:name="Choice" doc:id="ac70878b-537c-43da-8e4a-11cb8f4ea7b6" >
+			<when expression="#[vars.healthCheck]">
+				<os:store doc:name="set-circuit-breaker-close" doc:id="69d0a93e-1301-4d3a-b416-5f8810318ef9" key="cb" objectStore="Object_store_cb">
+					<os:value ><![CDATA[#[false]]]></os:value>
+				</os:store>
+			</when>
+			<otherwise >
+				<os:store doc:name="set-circuit-breaker-open" doc:id="c9a962db-a67e-4c78-ac4b-909b49a298e0" key="cb" objectStore="Object_store_cb">
+					<os:value ><![CDATA[#[true]]]></os:value>
+				</os:store>
+			</otherwise>
+		</choice>
+	</flow>
+</mule>

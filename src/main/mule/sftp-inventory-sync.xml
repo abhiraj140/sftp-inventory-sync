@@ -1,16 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
-	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
-	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
 http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
 http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
-http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
 	<flow name="sftp-inventory-sync-flow" doc:id="35f86b6c-8b46-4ba1-9a0f-71380165b341" >
-		<sftp:read doc:name="read-full-inventory-data" doc:id="7e62d2a7-629e-49c7-a716-fcc73c79ccb2" config-ref="SFTP_Config" path='#["source/full_inventory_$(now() as Date as String).csv"]' outputMimeType='application/csv; bodystartlinenumber=1; headerlinenumber=0; streaming=true; separator=","; header=true' >
+		<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="76b5fd6c-02db-4973-8774-68053ea22071" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="a7959357-636c-4db5-b8a0-1b3bc68e88b6">
+			<sftp:read doc:name="read-full-inventory-data" doc:id="7e62d2a7-629e-49c7-a716-fcc73c79ccb2" config-ref="SFTP_Config" path="#[p('sftp.source')++&quot;full_inventory_&quot; ++ (now()as String {format: &quot;MM-dd-YY&quot;}) ++&quot;.csv&quot;]" outputMimeType='application/csv; bodystartlinenumber=1; headerlinenumber=0; streaming=true; separator=","; header=true'>
 			<non-repeatable-stream />
 		</sftp:read>
+				<error-handler ref="sftp-custom-error-handler" />
+		</try>
+		</until-successful>
 		<ee:transform doc:name="convert-payload-to-json" doc:id="a543cc4b-19b7-4db5-8bc9-f65ad2657b36">
 			<ee:message>
 				<ee:set-payload><![CDATA[%dw 2.0
@@ -35,16 +42,123 @@ payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
 					</batch:aggregator>
 				</batch:step>
 				<batch:step name="batch-step-error-records" doc:id="64721d0a-a0b5-4fd3-8787-5c1e416bc08f" acceptExpression='#[!((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]' acceptPolicy="ALL">
-					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="fb6e4aef-ed33-4a58-8d06-4060c960d144" size="5" preserveMimeTypes="true">
+					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="fb6e4aef-ed33-4a58-8d06-4060c960d144" preserveMimeTypes="true" streaming="true">
 						<flow-ref doc:name="flow-reference-create-success-records-subflow" doc:id="e1588395-9d56-4401-a385-8914daba8279" name="create-error-records-subflow"/>
 					</batch:aggregator>
 				</batch:step>
 			</batch:process-records>
 			<batch:on-complete >
 				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="3159be8a-81b7-4a77-aed5-a185bef33a61" message="#[%dw 2.0&#10;output application/json&#10;---&#10;payload]"/>
+				<os:retrieve-all doc:name="retrieve the success" doc:id="8069455b-0e40-4caa-afab-06ae8f045985" objectStore="Object_store1" target="success"/>
+				<os:retrieve-all doc:name="Retrieve all" doc:id="db17a82e-ae8a-44da-b1d9-d707bc958dbb" objectStore="Object_store_cb" target="cbStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="fbad078b-a981-473c-b250-1ddad664cb35" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[output application/java
+var date= write((now() as Date {format:"MM-dd-yy"}),"application/json")
+---
+("Hi Team,
+The nightly inventory synchronization from Oracle WMS to Salesforce Commerce Cloud (SFCC) has completed successfully.
+
+Sync Summary:
+-------------------------------------------
+DateTime: $(now() as String {format: 'MMM dd, yyyy HH:mm:ss'})
+Job Instance ID: $(correlationId)
+Source File: full_inventory_$(date[1 to -2]).csv"++
+if(!isEmpty(vars.cbStatus))
+	if(!isEmpty(vars.success))
+"
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error.
+Operations will remain paused until the connection is restored.
+In the interim, all pending records are being backed up for subsequent reprocessing.
+Valid records which are synced till the error can be found at /$((p('sftp.targetPath'))[0 to -2]) directory.
+Any records that failed validation have been stored at /$((p('sftp.errorPath'))[0 to -2]) directory for the Technical Support Team to manual review."
+	else
+		"
+The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error.
+Operations will remain paused until the connection is restored."
+else
+"
+All successfully synced records met the mandatory criteria can be found at /$((p('sftp.targetPath'))[0 to -2]) directory.
+Any records that failed validation have been stored at /$((p('sftp.errorPath'))[0 to -2]) directory for the Technical Support Team to manual review.
+
+Regards,
+Mulesoft Integration") as String]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<email:send doc:name="send-email" doc:id="55347a07-07a2-459e-91a2-aeab55dc6bcf" config-ref="Email_SMTP" fromAddress="${smtp.user}" subject='#["Inventory Sync Completion - Oracle WMS to SFCC - "++ (now() as String {format: "MM-dd-yy"})]'>
+					<email:to-addresses >
+						<email:to-address value="#[p('smtp.receiver')]" />
+					</email:to-addresses>
+					<email:body contentType="text/plain" />
+				</email:send>
 			</batch:on-complete>
 		</batch:job>
 	</flow>
+	<!-- <flow name="sftp-inventory-sync-queue-flow" doc:id="6210ad6b-2774-44b7-96dd-5f47bd4af91d" >
+		<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="1adf5574-1c52-4231-93fd-0cfb60fe2d9d" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="cc81c10e-3e48-42b9-9858-1f05088068c3">
+			<sftp:read doc:name="read-full-inventory-data" doc:id="ad9b7516-73d2-4540-919f-5985386c40fb" config-ref="SFTP_Config" path="#[p('sftp.source')++&quot;full_inventory_$(now() as Date as String).csv&quot;]" outputMimeType='application/csv; bodystartlinenumber=1; headerlinenumber=0; streaming=true; separator=","; header=true'>
+			<non-repeatable-stream />
+		</sftp:read>
+				<error-handler ref="sftp-custom-error-handler" />
+		</try>
+		</until-successful>
+		<ee:transform doc:name="convert-payload-to-json" doc:id="dc998f34-3f7e-4dce-b89e-c76874bfdc3d">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json deferred=true, indent=false
+-&#45;&#45;
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="sftp-inventory-sync-batchQ-job" doc:id="46d0e12c-62d8-4d01-9f3b-339a6f6eeae2" blockSize="20" maxConcurrency="1">
+			<batch:process-records>
+				<batch:step name="batch-step-valid-records" doc:id="97a34e7d-47e6-4ab1-81de-7093133ff957" acceptExpression='#[((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]'>
+					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="62180d18-0761-42e3-80e1-e6798a6b6d98" streaming="true" preserveMimeTypes="true">
+						<ee:transform doc:name="group-data-by-StoreId" doc:id="db2c085f-5365-4df2-87ea-4bba9a25639d">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json deferred=true, indent=false
+-&#45;&#45;
+payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+						<parallel-foreach doc:name="Parallel For Each" doc:id="58296351-e571-4ea3-b749-d14ddfb85baa" maxConcurrency="5">
+							<ee:transform doc:name="Transform Message" doc:id="b71545dd-5e7c-4d0f-bcfe-c7f5c8623dde" >
+								<ee:message >
+									<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+-&#45;&#45;
+payload]]></ee:set-payload>
+								</ee:message>
+							</ee:transform>
+							<jms:publish doc:name="Publish" doc:id="50770482-8355-487a-a989-7fd84e17131a" config-ref="JMS_Config" destination="valid" >
+								<jms:message outboundContentType="application/csv" />
+							</jms:publish>
+						</parallel-foreach>
+					</batch:aggregator>
+				</batch:step>
+				<batch:step name="batch-step-error-records" doc:id="58fb7a20-2ed1-4a8f-b88c-bf90ba028bcc" acceptExpression='#[!((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]' acceptPolicy="ALL">
+					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="8edd5d72-2ada-48ad-92af-b53480e7b942" preserveMimeTypes="true" streaming="true">
+						<ee:transform doc:name="Transform Message" doc:id="21e3eb1f-dc5c-4b6d-9910-da089df35cd3" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/csv
+-&#45;&#45;
+payload]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<jms:publish doc:name="Publish" doc:id="5994ada6-5593-4b04-a23a-8314533a63c2" config-ref="JMS_Config" destination="error">
+							<jms:message outboundContentType="application/csv" />
+						</jms:publish>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="c78c6e22-7e85-471d-8195-391167b88094" message="#[%dw 2.0&#10;output application/json&#10;-&#45;&#45;&#10;payload]"/>
+			</batch:on-complete>
+		</batch:job>
+	</flow> -->
 	<sub-flow name="create-success-records-subflow" doc:id="95f78330-1363-4c67-9a80-7483f192ad74" >
 		<foreach doc:name="For Each" doc:id="8ba7b7d9-a421-4666-84a0-7d3400a2659d">
 							<ee:transform doc:name="set-variable-fileName" doc:id="cea6b817-1348-407f-ae82-7bcb4709789e" >
@@ -57,37 +171,42 @@ output application/json
 ("inventory_" ++ payload[0].StoreId ++"_" ++ now() as Date ++ ".csv")]]></ee:set-variable>
 				</ee:variables>
 			</ee:transform>
-			<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="02dc2665-97c9-4356-9052-75828792f8f5" objectStore="Object_store1" target="storedFileName" />
-			<ee:transform doc:name="set-variable-flag" doc:id="0577cf49-2293-48f4-9cc3-97d45c655f34" >
-				<ee:message >
+			<os:retrieve doc:name="retrieve-cb-status" doc:id="7add15f2-3d1e-410f-a5e0-bba821b58ed3" key="cb" objectStore="Object_store_cb" target="cb">
+				<os:default-value ><![CDATA[#[false]]]></os:default-value>
+			</os:retrieve>
+			<choice doc:name="Choice" doc:id="a3fd2859-18a7-4a93-8f68-8fe1f41a249a" >
+				<when expression="#[vars.cb]">
+					<ee:transform doc:name="error-csv-payload" doc:id="debbc200-a6c3-4efd-a2ed-13b784d8f771">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv
+---
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<jms:publish doc:name="publish-to-failedValidQueue" doc:id="8e5d47c9-8a11-438d-8426-4f91fe5f01eb" config-ref="JMS_Config" destination="${jms.validQueue}">
+						<jms:message outboundContentType="application/csv" />
+					</jms:publish>
+				</when>
+				<otherwise >
+					<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="02dc2665-97c9-4356-9052-75828792f8f5" objectStore="Object_store1" target="storedFileName" />
+					<ee:transform doc:name="set-variable-flag" doc:id="0577cf49-2293-48f4-9cc3-97d45c655f34">
+				<ee:message>
 				</ee:message>
-				<ee:variables >
-					<ee:set-variable variableName="flag" ><![CDATA[%dw 2.0
+				<ee:variables>
+					<ee:set-variable variableName="flag"><![CDATA[%dw 2.0
 output application/json
 ---
 ((vars.storedFileName default []) pluck($$ as String) )contains(vars.fileName)]]></ee:set-variable>
+					<ee:set-variable variableName="writePath"><![CDATA[%dw 2.0
+output application/json
+---
+p('sftp.targetPath') ++ vars.fileName]]></ee:set-variable>
 				</ee:variables>
 			</ee:transform>
-						<choice doc:name="choice-write-append" doc:id="9df270ea-9364-4893-aef9-63931e2020c2">
-							<when expression="#[vars.flag]">
-								<sftp:write doc:name="write-into-an-existing-file" doc:id="7564bc18-b9b7-4be1-80ab-2111f138cdff" config-ref="SFTP_Config" path="#[p('sftp.targetPath') ++ vars.fileName]" mode="APPEND">
-									<sftp:content><![CDATA[#[output application/csv header=false
----
-payload]]]></sftp:content>
-								</sftp:write>
-							</when>
-							<otherwise>
-								<sftp:write doc:name="write-a-new-file" doc:id="c7fd0f86-c2d8-400a-9cf4-b1ad11461805" config-ref="SFTP_Config" mode="APPEND" path='#["target/" ++ vars.fileName]'>
-							<sftp:content><![CDATA[#[output application/csv
----
-payload]]]></sftp:content>
-						</sftp:write>
-									<logger level="INFO" doc:name="logger-new-file-created" doc:id="582dd068-4bd4-4b99-bafd-927852b2a12b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.fileName ++ &quot;has created at &quot; ++ p('sftp.targetPath')]" />
-									<os:store doc:name="store-fileName" doc:id="80ac847a-a6b0-4a97-b7c3-bb5841daf8a9" objectStore="Object_store1" key="#[vars.fileName]">
-							<os:value><![CDATA[#[true]]]></os:value>
-						</os:store>
-							</otherwise>
-						</choice>
+					<flow-ref doc:name="flow-reference-sftp-write-valid-records-subflow" doc:id="5caa3af8-6738-493a-ac36-bccde9ae7a39" name="sftp-write-valid-records-subflow"/>
+				</otherwise>
+			</choice>
 						</foreach>
 	</sub-flow>
 	<sub-flow name="create-error-records-subflow" doc:id="0b37703d-b0d2-48be-865c-8c4335985086" >
@@ -105,37 +224,124 @@ output application/json
 ("errorRecords-" ++ (now()as Date as String) ++ ".csv")]]></ee:set-variable>
 							</ee:variables>
 						</ee:transform>
-						<os:retrieve-all doc:name="Retrieve all" doc:id="49a79ba7-2c89-4030-91d8-7fab09d7afe6" objectStore="Object_store1" target="storedFileName" />
-						
-						<ee:transform doc:name="set-variable-errorFlag" doc:id="f65a47a2-d1d0-4cc2-8347-88c1ceedde75" >
-			<ee:message >
+						<os:retrieve doc:name="retrieve-cb-status" doc:id="0bbc7118-7e89-4021-a544-c0a049ae80df" key="cb" objectStore="Object_store_cb" target="cb">
+				<os:default-value ><![CDATA[#[false]]]></os:default-value>
+			</os:retrieve>
+						<choice doc:name="Choice" doc:id="877ecd04-8ec5-418b-8027-1a97766f022e" >
+			<when expression="#[vars.cb]">
+				<jms:publish doc:name="publish-to-failedErrorQueue" doc:id="788c97fa-16cb-401f-bce4-b4e3a0fdfe4e" config-ref="JMS_Config" destination="${jms.errorQueue}" persistentDelivery="true">
+					<jms:message outboundContentType="application/csv" />
+				</jms:publish>
+			</when>
+			<otherwise >
+				<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="49a79ba7-2c89-4030-91d8-7fab09d7afe6" objectStore="Object_store1" target="storedFileName" />
+				<ee:transform doc:name="set-variable-errorFlag" doc:id="f65a47a2-d1d0-4cc2-8347-88c1ceedde75">
+			<ee:message>
 			</ee:message>
-			<ee:variables >
-				<ee:set-variable variableName="errorFlag" ><![CDATA[%dw 2.0
+			<ee:variables>
+				<ee:set-variable variableName="errorFlag"><![CDATA[%dw 2.0
 output application/json
 ---
 ((vars.storedFileName default []) pluck($$ as String) )contains(vars.errorFilename)]]></ee:set-variable>
+				<ee:set-variable variableName="writePath"><![CDATA[%dw 2.0
+output application/json
+---
+p('sftp.errorPath') ++ vars.errorFilename]]></ee:set-variable>
 			</ee:variables>
 		</ee:transform>
-						<choice doc:name="Choice" doc:id="43bd40d9-1bd8-4059-9c2a-ffa3d0132c48" >
-							<when expression="#[vars.errorFlag]">
-								<sftp:write doc:name="append-error-file" doc:id="c272844b-4902-4659-9481-ae1e955814ef" config-ref="SFTP_Config" path="#[p('sftp.errorPath') ++ vars.errorFilename]" mode="APPEND">
-									<sftp:content><![CDATA[#[output application/csv header=false
+				<flow-ref doc:name="flow-reference-sftp-write-error-records-subflow" doc:id="b5770221-174c-4647-80df-4abb12cdf7a2" name="sftp-write-error-records-subflow"/>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="sftp-write-valid-records-subflow" doc:id="9e3701a8-bb20-446c-86c9-9723135cc08c" >
+		<choice doc:name="choice-write-append" doc:id="9df270ea-9364-4893-aef9-63931e2020c2">
+							<when expression="#[vars.flag]">
+					<ee:transform doc:name="write-into-an-existing-file" doc:id="060f2d94-4c0d-4c01-8748-941e918f1ee7">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=false
 ---
-payload]]]></sftp:content>
-								</sftp:write>
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<flow-ref doc:name="flow-reference-sftp-write-subflow" doc:id="3a944177-f536-48d8-b097-3a958c92bd92" name="sftp-write-subflow" />
 							</when>
-							<otherwise >
-								<sftp:write doc:name="write-error-file" doc:id="bf6266a9-77d4-4d81-ae3d-ac6797642258" config-ref="SFTP_Config" mode="APPEND" path="#[p('sftp.errorPath') ++ vars.errorFilename]">
-							<sftp:content><![CDATA[#[output application/csv
+							<otherwise>
+									<ee:transform doc:name="write-a-new-file" doc:id="3329d717-964a-4657-b555-a5c4370643cc">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/csv
 ---
-payload]]]></sftp:content>
-						</sftp:write>
-								<logger level="INFO" doc:name="logger-error-file-created" doc:id="2f270cd0-89d0-410d-8414-6bf2ad302d1b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.errorFilename ++ &quot;has created at &quot; ++ p('sftp.targetPath')]"/>
-								<os:store doc:name="Store" doc:id="c0c60eec-e87d-4663-9e08-54000f56a7a9" objectStore="Object_store1" key="#[vars.errorFilename]">
-							<os:value><![CDATA[#[true]]]></os:value>
-						</os:store>
+payload]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<flow-ref doc:name="flow-reference-sftp-write-subflow" doc:id="ff5512d9-9996-465d-a881-970edd09c469" name="sftp-write-subflow" />
+					<logger level="INFO" doc:name="logger-new-file-created" doc:id="582dd068-4bd4-4b99-bafd-927852b2a12b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.fileName ++ &quot;has created at &quot; ++ p('sftp.targetPath')]" />
+				<flow-ref doc:name="flow-reference-store-new-fileName-subflow" doc:id="97aa329b-6c1f-48f7-896b-3ca6af1e47d3" name="store-new-fileName-subflow"/>
 							</otherwise>
 						</choice>
+	</sub-flow>
+	<sub-flow name="sftp-write-error-records-subflow" doc:id="d7914a9d-f2b2-46c8-9753-5db4fb532019" >
+		<choice doc:name="Choice" doc:id="43bd40d9-1bd8-4059-9c2a-ffa3d0132c48">
+			<when expression="#[vars.errorFlag]">
+				<ee:transform doc:name="append-error-file" doc:id="7b236b48-8321-490a-af01-3231a41bdd76">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/csv header=false
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="flow-reference-sftp-write-subflow" doc:id="d194b561-ca54-4948-a87c-27e478c5dfa8" name="sftp-write-subflow" />
+							</when>
+			<otherwise>
+								<ee:transform doc:name="write-error-file" doc:id="235f3b52-1864-483e-a6cc-cdabf089107f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/csv
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<flow-ref doc:name="flow-reference-sftp-write-subflow" doc:id="98b6d686-9909-42cb-845a-b1089e6b5dbf" name="sftp-write-subflow" />
+				<logger level="INFO" doc:name="logger-error-file-created" doc:id="2f270cd0-89d0-410d-8414-6bf2ad302d1b" message="#[%dw 2.0&#10;output application/json&#10;---&#10;vars.errorFilename ++ &quot;has created at &quot; ++ p('sftp.errorPath')]" />
+				<flow-ref doc:name="flow-reference-store-error-filename" doc:id="abd7d8c3-baad-4bab-b8a9-6ea9b03f722a" name="store-error-filename-subflow"/>
+							</otherwise>
+						</choice>
+	</sub-flow>
+	<sub-flow name="store-new-fileName-subflow" doc:id="6673a914-cff2-45d6-81eb-4416fe5d5772" >
+		<choice doc:name="Choice" doc:id="0aabaad8-70c7-4bca-95e4-220a3539d901" >
+			<when expression="#[(vars.cbOpen default false)]">
+				<logger level="INFO" doc:name="logger-cb-open" doc:id="bc6b9871-f0fa-46f4-8ab1-fc0806a88030" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation. circuit Breaker is open&quot;,&#10;}]"/>
+			</when>
+			<otherwise >
+				<os:store doc:name="logger-store-fileName" doc:id="80ac847a-a6b0-4a97-b7c3-bb5841daf8a9" objectStore="Object_store1" key="#[vars.fileName]">
+							<os:value><![CDATA[#[true]]]></os:value>
+						</os:store>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="store-error-filename-subflow" doc:id="82606ef1-1c28-4660-89f4-0f41be42e111" >
+		<choice doc:name="Choice" doc:id="99394131-0a9a-42d4-86b9-79a083cab579" >
+			<when expression="#[(vars.cbOpen default false)]">
+				<logger level="INFO" doc:name="logger-store-fileName" doc:id="044e2c8c-59ca-48d1-8da8-b5fb8aa3c2f1" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation. circuit Breaker is open&quot;,&#10;}]"/>
+			</when>
+			<otherwise >
+				<os:store doc:name="store-error-filename" doc:id="c0c60eec-e87d-4663-9e08-54000f56a7a9" objectStore="Object_store1" key="#[vars.errorFilename]">
+							<os:value><![CDATA[#[true]]]></os:value>
+						</os:store>
+			</otherwise>
+		</choice>
+	</sub-flow>
+	<sub-flow name="sftp-write-subflow" doc:id="d1e0cae7-c821-419a-8387-fdea7cb555fe" >
+		<try doc:name="Try" doc:id="cdd818d0-22b1-404a-9724-e4b44afc7346" >
+			<until-successful maxRetries="${retry.attempt}" doc:name="Until Successful" doc:id="b097a3ee-bd87-4a7b-8256-ed620edb20d0" millisBetweenRetries="${retry.frequency}">
+			<try doc:name="Try" doc:id="f57518d2-cc68-491f-ad65-2c9d2104ff63">
+			<sftp:write doc:name="write-sftp" doc:id="5f4a0338-8169-4471-9f6b-68b2e84f40fb" config-ref="SFTP_Config" path="#[vars.writePath]" mode="APPEND" />
+			<error-handler ref="sftp-custom-error-handler" />
+		</try>
+		</until-successful>
+			<error-handler ref="sftp-custom-error-handler" />
+		</try>
 	</sub-flow>
 </mule>

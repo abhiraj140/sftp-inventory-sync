@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties"
-	xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp"
-	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:email="http://www.mulesoft.org/schema/mule/email" xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd
 http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd
-http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd">
 	<sftp:config name="SFTP_Config" doc:name="SFTP Config" doc:id="73b375b0-bc8b-498d-bc69-1c17c0aad639" >
 		<sftp:connection host="${sftp.host}" port="${sftp.port}" username="${secure::sftp.user}" identityFile="${sftp.identityFile}" />
 	</sftp:config>
@@ -13,5 +15,18 @@ http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/cu
 	<configuration-properties doc:name="Configuration properties" doc:id="62503eb1-639d-41f9-8d39-31e3cebc6e1b" file="env/config-${mule.env}.properties" />
 	<global-property doc:name="Global Property" doc:id="4f5d419b-eb6b-459e-964b-502f06459ab5" name="mule.env" value="stage" />
 	<global-property doc:name="Global Property" doc:id="98767c67-90b7-4dc4-b275-5fddf0488c10" name="secret.key" value="LogEncrypt@Stage" />
-	<os:object-store name="Object_store1" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" />
+	<os:object-store name="Object_store1" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
+	<os:object-store name="Object_store_cb" doc:name="Object store" doc:id="1fc77b00-b5a2-45cc-b4db-196a8d16e074" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
+	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="76c29043-c560-4c4d-9b42-910ca8d7cecc" >
+		<jms:active-mq-connection username="${jms.user}" password="${secure::jms.password}" >
+			<jms:factory-configuration brokerUrl="${jms.brocker.url}" maxRedelivery="${jms.maxRedelivery}"/>
+		</jms:active-mq-connection>
+	</jms:config>
+	<email:smtp-config name="Email_SMTP" doc:name="Email SMTP" doc:id="72bf071f-0345-4141-9a2f-29f29e5ac376" >
+		<email:smtp-connection host="${smtp.host}" port="${smtp.port}" user="${smtp.user}" password="${secure::smtp.password}">
+			<email:properties >
+				<email:property key="mail.smtp.starttls.enable" value="true" />
+			</email:properties>
+		</email:smtp-connection>
+	</email:smtp-config>
 </mule>

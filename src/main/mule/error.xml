@@ -1,5 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd"></mule>
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<error-handler name="global-error-handler" doc:id="1eebb3a5-11d9-43e6-b36e-b641cbc53a9b" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="f3cc510e-018e-423c-a01f-1054ccb5146b" >
+			<logger level="INFO" doc:name="Logger" doc:id="9ad409a0-8405-4816-804c-20c3ea85571e" message='#["error logged as: " ++ error.description]'/>
+		</on-error-propagate>
+	</error-handler>
+	<error-handler name="health-check-error-handler" doc:id="77d6d8a6-8017-4714-942d-ff04f4f3347f" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="6e83f0ba-c9af-44a1-970e-045cae2cbf36" type="SFTP:CONNECTIVITY">
+			<logger level="INFO" doc:name="logger-health-check-error" doc:id="5d2cdee7-f94c-4ea2-b2f9-853e78b2b281" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+		</on-error-propagate>
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="4ffd95d8-f0dd-4571-a196-c889a607fb8d" type="ANY">
+			<set-variable value="#[false]" doc:name="set-variable-healthCheck" doc:id="745306c7-9197-4cb5-8b59-b3fd2ef6e28a" variableName="healthCheck"/>
+		</on-error-continue>
+		
+	</error-handler>
+	<error-handler name="sftp-custom-error-handler" doc:id="674bbae5-99dd-4106-ae65-69862d6702a8" >
+				<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="f9a1a528-6a09-4626-88d1-bb41a2a64933" type="SFTP:ACCESS_DENIED, SFTP:RETRY_EXHAUSTED,SFTP:INVALID_CREDENTIALS,MULE:RETRY_EXHAUSTED">
+					<os:store doc:name="store-cb-status-true" doc:id="24803f53-e42b-40cd-9845-e2a456a80e74" key="cb" objectStore="Object_store_cb">
+						<os:value ><![CDATA[#[true]]]></os:value>
+					</os:store>
+					<logger level="INFO" doc:name="error-logger" doc:id="c46b6272-02af-48d5-9421-4c19b39f6975" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+			<choice doc:name="Choice" doc:id="65b56240-4169-4526-9449-cb61b7847bf0" >
+				<when expression="#[!isEmpty(payload)]">
+					<jms:publish doc:name="publish-to-errorQueue" doc:id="74b013f6-cbc4-4c55-9f8b-85ab79c7bc76" config-ref="JMS_Config" destination="#[if(vars.writePath contains &quot;inventory&quot;) p('jms.validQueue') else p('jms.errorQueue')]">
+				<jms:message outboundContentType="application/csv" />
+			</jms:publish>
+					<ee:transform doc:name="circuit-breaker-payload" doc:id="93711f60-bd35-4911-a8f1-2a1f6f5d8f07">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/java
+---
+"The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error. 
+Operations will remain paused until the connection is restored. 
+In the interim, all pending records are being backed up for subsequent reprocessing.
+
+Error Summary:
+-------------------------------------------
+"
+++
+"CorrelationId: " ++ correlationId ++"\nFailing Component: " ++ write(error.failingComponent) ++ "\n Error: " ++ write(error,"application/java")
+++
+"
+
+Regards,
+Mulesoft Integration"]]></ee:set-payload>
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="cbOpen" ><![CDATA[%dw 2.0
+output application/java
+---
+true]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<email:send doc:name="send-email-circuit-breaker" doc:id="b1cf414d-ed36-401c-a8f1-c0b6559ecfad" config-ref="Email_SMTP" fromAddress="${smtp.user}" subject='#["ERROR::Inventory Sync Failure - Oracle WMS to SFCC - "++ (now() as String {format: "MM-dd-yy"})]'>
+					<email:to-addresses >
+						<email:to-address value="#[p('smtp.receiver')]" />
+					</email:to-addresses>
+					<email:body contentType="text/plain" />
+				</email:send>
+				</when>
+			</choice>
+				</on-error-continue>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="9c86232b-869f-4b54-8b9e-e41342a48f46" type="SFTP:CONNECTIVITY, SFTP:FILE_LOCK">
+					<logger level="INFO" doc:name="logger-coonectivity-error" doc:id="9d58142b-993c-4420-8d12-898c89cf4bb0" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+				</on-error-propagate>
+		<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="5c8937fd-a5c5-4f21-99bb-251d24e5074a" type="ANY">
+			<logger level="INFO" doc:name="error-logger" doc:id="0b24f8e8-daba-472a-893d-94e38529b397" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Error in sFTP operation.&quot;,&#10;	&quot;errorMessage&quot;: error.description&#10;}]"/>
+			<choice doc:name="Choice" doc:id="4a14c1ce-efda-49fd-af2f-9a37c427c482" >
+				<when expression="#[!isEmpty(payload)]">
+					<jms:publish doc:name="publish-to-errorQueue" doc:id="7c9023d4-0fbe-4467-972b-534e661b7d5f" config-ref="JMS_Config" destination="#[if(vars.writePath contains &quot;inventory&quot;) p('jms.validQueue') else p('jms.errorQueue')]">
+				<jms:message outboundContentType="application/csv" />
+			</jms:publish>
+					<set-variable value="#[true]" doc:name="set-variable-cbOpen" doc:id="cd31d797-991c-4066-8958-a5e50712e15d" variableName="cbOpen"/>
+				</when>
+			</choice>
+		</on-error-continue>
+			</error-handler>
+</mule>

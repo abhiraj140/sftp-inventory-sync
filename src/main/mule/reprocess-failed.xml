@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:os="http://www.mulesoft.org/schema/mule/os"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	<flow name="reprocess-failed-flow" doc:id="31f01bbf-469e-4cda-a6bd-ed2dfe2da1bb" >
+		<flow-ref doc:name="flow-reference-health-check-connection-test-subflow" doc:id="c74979fb-862a-4a83-9a8c-10073eecd499" name="health-check-connection-test-subflow" />
+		<choice doc:name="Choice" doc:id="9e62dcad-04e0-4b59-bedd-f689ead30bba" >
+			<when expression="#[(vars.healthCheck)]">
+				<os:retrieve-all doc:name="retrieve-created-fileNames" doc:id="e6f3e7b4-37ed-46fd-ba32-932c286176e0" objectStore="Object_store1" target="storedFileName"/>
+			</when>
+			<otherwise >
+				<flow-ref doc:name="Flow Reference" doc:id="6570bb9e-46f9-4c76-bff1-02e37ac51067" name="reprocess-valid-failed-records-subflow"/>
+			</otherwise>
+		</choice>
+	</flow>
+	<sub-flow name="reprocess-valid-failed-records-subflow" doc:id="ff0a2ce8-f188-44a4-b904-553c089ea04d" >
+		<logger level="INFO" doc:name="Logger" doc:id="dfb4e12c-f593-471c-9854-ae9eeebe6a73" />
+	</sub-flow>
+</mule>
