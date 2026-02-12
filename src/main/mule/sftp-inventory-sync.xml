@@ -26,7 +26,7 @@ output application/json deferred=true, indent=false
 payload]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
-		<batch:job jobName="sftp-inventory-sync-batch-job" doc:id="5b11018a-7764-49c1-9152-07790d4710c9" blockSize="20" maxConcurrency="1">
+		<batch:job jobName="sftp-inventory-sync-batch-job" doc:id="5b11018a-7764-49c1-9152-07790d4710c9" maxConcurrency="${batch.concurrency}" maxFailedRecords="${batch.maxFailed}" blockSize="${batch.blockSize}">
 			<batch:process-records>
 				<batch:step name="batch-step-valid-records" doc:id="3eaef80a-6c52-4dbf-a16d-987cbf0b3315" acceptExpression='#[((!isEmpty(payload.SKU) and !isEmpty(payload.StoreId) and !isEmpty(payload.Type) and !isEmpty(payload.Quantity) and !isEmpty(payload.Timestamp) ) and !contains(payload.Quantity as Number  default 0.1,/[\.-]/) and contains(["Backorder","Standard"], payload.Type))]'>
 					<batch:aggregator doc:name="batch-aggregator-valid-records" doc:id="364a9622-4ded-4dc8-9ef1-c457bf2efa37" streaming="true" preserveMimeTypes="true">

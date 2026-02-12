@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>3012231a-eb59-4ad3-8d03-34430f8e79b3</groupId>
@@ -43,9 +45,22 @@
 						<muleVersion>4.9.13</muleVersion>
 						<replicas>1</replicas>
 						<vCores>0.1</vCores>
+						<properties>
+							<mule.env>${mule.env}</mule.env>
+						</properties>
+						<secureProperties>
+							<secret.key>${secret.key}</secret.key>
+						</secureProperties>
 						<deploymentSettings>
 							<generateDefaultPublicUrl>true</generateDefaultPublicUrl>
 						</deploymentSettings>
+						<integrations>
+							<services>
+								<objectStoreV2>
+									<enabled>true</enabled>
+								</objectStoreV2>
+							</services>
+						</integrations>
 					</cloudhub2Deployment>
 					<sharedLibraries>
 						<sharedLibrary>

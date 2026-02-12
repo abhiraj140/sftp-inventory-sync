@@ -45,9 +45,11 @@ jobs:
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             echo "ENV_NAME=Prod" >> $GITHUB_ENV
             echo "APP_NAME=${{ github.event.repository.name }}" >> $GITHUB_ENV
+            echo "PROPERTY_NAME=prod" >> $GITHUB_ENV
           else
             echo "ENV_NAME=Staging" >> $GITHUB_ENV
             echo "APP_NAME=${{ github.event.repository.name }}-stage" >> $GITHUB_ENV
+            echo "PROPERTY_NAME=stage" >> $GITHUB_ENV
           fi
 
       # ----------------------------------------------------
@@ -73,4 +75,6 @@ jobs:
           -Dclient.id="${{ secrets.CONNECTED_APP_CLIENT_ID }}" \
           -Dclient.secret="${{ secrets.CONNECTED_APP_CLIENT_SECRET }}" \
           -Denv.name="${{ env.ENV_NAME }}" \
-          -Dapp.name="${{ env.APP_NAME }}"
+          -Dapp.name="${{ env.APP_NAME }}" \
+          -Dmule.env="${{ env.PROPERTY_NAME }}" \
+          -Dsecret.key="{{ secrets.MULESOFT_SECRET_KEY }}"
