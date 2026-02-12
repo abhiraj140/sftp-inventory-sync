@@ -6,7 +6,7 @@
 
 	<groupId>3012231a-eb59-4ad3-8d03-34430f8e79b3</groupId>
 	<artifactId>sftp-inventory-sync</artifactId>
-	<version>1.0.3</version>
+	<version>1.0.5</version>
 	<packaging>mule-application</packaging>
 
 	<name>sftp-inventory-sync</name>
