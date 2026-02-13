@@ -6,7 +6,7 @@
 
 	<groupId>3012231a-eb59-4ad3-8d03-34430f8e79b3</groupId>
 	<artifactId>sftp-inventory-sync</artifactId>
-	<version>1.0.9</version>
+	<version>1.0.10</version>
 	<packaging>mule-application</packaging>
 
 	<name>sftp-inventory-sync</name>
@@ -54,6 +54,13 @@
 						<deploymentSettings>
 							<generateDefaultPublicUrl>true</generateDefaultPublicUrl>
 						</deploymentSettings>
+						<integrations>
+							<services>
+								<objectStoreV2>
+									<enabled>true</enabled>
+								</objectStoreV2>
+							</services>
+						</integrations>
 					</cloudhub2Deployment>
 					<sharedLibraries>
 						<sharedLibrary>
