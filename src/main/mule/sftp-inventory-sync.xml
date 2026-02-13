@@ -49,9 +49,9 @@ payload groupBy($.StoreId) pluck($)]]></ee:set-payload>
 			</batch:process-records>
 			<batch:on-complete >
 				<logger level="INFO" doc:name="logger-on-complete-batch" doc:id="3159be8a-81b7-4a77-aed5-a185bef33a61" message="#[output application/json&#10;---&#10;{&#10;	&quot;appName&quot;: p('app.name'),&#10;	&quot;correlationId&quot;: correlationId,&#10;	&quot;timeStamp&quot;: now(),&#10;	&quot;message&quot;: &quot;Batch Job Completed&quot;&#10;}]"/>
-				<os:retrieve-all doc:name="retrieve the success" doc:id="8069455b-0e40-4caa-afab-06ae8f045985" objectStore="Object_store1" target="success"/>
-				<os:retrieve-all doc:name="Retrieve all" doc:id="db17a82e-ae8a-44da-b1d9-d707bc958dbb" objectStore="Object_store_cb" target="cbStatus"/>
-				<ee:transform doc:name="Transform Message" doc:id="fbad078b-a981-473c-b250-1ddad664cb35" >
+				<os:retrieve-all doc:name="retrieve-the-success" doc:id="8069455b-0e40-4caa-afab-06ae8f045985" objectStore="Object_store1" target="success"/>
+				<os:retrieve-all doc:name="retrieve-cb-status" doc:id="db17a82e-ae8a-44da-b1d9-d707bc958dbb" objectStore="Object_store_cb" target="cbStatus"/>
+				<ee:transform doc:name="email-body" doc:id="fbad078b-a981-473c-b250-1ddad664cb35" >
 					<ee:message >
 						<ee:set-payload ><![CDATA[output application/java
 var date= write((now() as Date {format:"MM-dd-yy"}),"application/json")
@@ -64,7 +64,7 @@ Sync Summary:
 DateTime: $(now() as String {format: 'MMM dd, yyyy HH:mm:ss'})
 Job Instance ID: $(correlationId)
 Source File: full_inventory_$(date[1 to -2]).csv"++
-if(!isEmpty(vars.cbStatus))
+if(vars.cbStatus.cb default false)
 	if(!isEmpty(vars.success))
 "
 The nightly Oracle WMS to SFCC inventory sync has been interrupted by an sFTP error.
