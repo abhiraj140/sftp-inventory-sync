@@ -77,4 +77,4 @@ jobs:
           -Denv.name="${{ env.ENV_NAME }}" \
           -Dapp.name="${{ env.APP_NAME }}" \
           -Dmule.env="${{ env.PROPERTY_NAME }}" \
-          -Dsecret.key="{{ secrets.MULESOFT_SEC_KEY }}"
+          -Dsecret.key="${{ secrets.MULESOFT_SEC_KEY }}"
