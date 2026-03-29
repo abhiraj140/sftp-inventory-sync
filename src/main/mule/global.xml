@@ -14,9 +14,7 @@ http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/cu
 	</sftp:config>
 	<secure-properties:config name="Secure_Properties_Config" doc:name="Secure Properties Config" doc:id="f3d13fbf-97ea-4a12-8a83-707d1173c978" file="env/secure-config-${mule.env}.properties" key="${secret.key}" />
 	<configuration-properties doc:name="Configuration properties" doc:id="62503eb1-639d-41f9-8d39-31e3cebc6e1b" file="env/config-${mule.env}.properties" />
-	<!-- <global-property doc:name="Global Property" doc:id="4f5d419b-eb6b-459e-964b-502f06459ab5" name="mule.env" value="stage" />
-	<global-property doc:name="Global Property" doc:id="98767c67-90b7-4dc4-b275-5fddf0488c10" name="secret.key" value="LogEncryptAStage" />
-	 --><os:object-store name="Object_store_no_file" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
+	<os:object-store name="Object_store_no_file" doc:name="Object store" doc:id="a0940bc9-9fbd-4331-895e-89f4779ca1a6" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
 	<os:object-store name="Object_store1" doc:name="Object store" doc:id="f53345b5-8434-4f51-b728-a9f0bcf32199" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
 	<os:object-store name="Object_store_cb" doc:name="Object store" doc:id="1fc77b00-b5a2-45cc-b4db-196a8d16e074" entryTtl="1" entryTtlUnit="DAYS" expirationIntervalUnit="HOURS"/>
 	<jms:config name="JMS_Config" doc:name="JMS Config" doc:id="76c29043-c560-4c4d-9b42-910ca8d7cecc" >
